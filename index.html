@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>HEAT GUARD – 熱中症リスク管理</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- デモバナー -->
+  <div id="demo-banner">
+    🎓 デモ版 — GPS・Open-Meteo APIは本番動作 / AIはモック切替可
+    <button id="ai-toggle" onclick="App.toggleAIMode()">AIモード: モック</button>
+  </div>
+
+  <!-- ヘッダー -->
+  <header id="app-header">
+    <div class="header-left">
+      <span class="app-icon">🌡️</span>
+      <div>
+        <div class="app-title">HEAT GUARD</div>
+        <div id="location-text" class="location-text">地点を選択してください</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div id="wbgt-badge" class="wbgt-badge">
+        <span id="wbgt-value" class="wbgt-num">--.-</span>
+        <span class="wbgt-unit">℃ WBGT</span>
+      </div>
+      <button id="refresh-btn" class="icon-btn" onclick="App.refreshWeather()" title="気象データを更新">↻</button>
+    </div>
+  </header>
+
+  <!-- タブナビ -->
+  <nav id="tab-nav">
+    <button class="tab-btn active" data-tab="monitor" onclick="App.switchTab('monitor')">
+      <span>📊</span><span class="tab-label">モニター</span>
+    </button>
+    <button class="tab-btn" data-tab="emergency" onclick="App.switchTab('emergency')">
+      <span>🚨</span><span class="tab-label">緊急対応</span>
+    </button>
+    <button class="tab-btn" data-tab="chat" onclick="App.switchTab('chat')">
+      <span>💬</span><span class="tab-label">AI相談</span>
+    </button>
+  </nav>
+
+  <!-- ══ モニタータブ ══ -->
+  <div id="tab-monitor" class="tab-content active">
+
+    <!-- 地点選択 -->
+    <div class="card" id="location-card">
+      <button class="preset-toggle" id="preset-toggle-btn" onclick="App.togglePresets()">
+        📍 地点を選択・切り替える <span id="preset-arrow">▼</span>
+      </button>
+
+      <div id="preset-panel" class="preset-panel hidden">
+        <!-- GPS -->
+        <button class="preset-item gps-btn" onclick="App.getGPS()">
+          <span class="preset-icon">📡</span>
+          <div>
+            <div class="preset-name">現在地（GPS）</div>
+            <div class="preset-sub">スマホのGPSで自動取得</div>
+          </div>
+        </button>
+
+        <div class="preset-divider">プリセット地点</div>
+        <div id="preset-list"></div>
+
+        <div class="preset-divider">カスタム地点を追加</div>
+        <div class="custom-input-area">
+          <input id="custom-name" type="text" placeholder="地点名（例：○○農場）" class="coord-input" maxlength="20">
+          <div class="coord-row">
+            <input id="custom-lat" type="number" placeholder="緯度 (例: 36.107)" class="coord-input" step="0.001">
+            <input id="custom-lon" type="number" placeholder="経度 (例: 140.093)" class="coord-input" step="0.001">
+          </div>
+          <button class="apply-btn" onclick="App.addCustomLocation()">＋ この地点を追加・保存</button>
+        </div>
+
+        <div id="saved-locations-section" class="hidden">
+          <div class="preset-divider">保存済み地点</div>
+          <div id="saved-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 天気バー -->
+    <div id="weather-bar" class="weather-bar hidden">
+      <span id="weather-emoji" class="weather-emoji">☀️</span>
+      <span id="weather-temp">--℃</span>
+      <span class="sep">|</span>
+      <span id="weather-hum">💧--%</span>
+      <span class="sep">|</span>
+      <span id="weather-solar">☀️-- W/m²</span>
+      <span class="sep">|</span>
+      <span id="weather-wind">💨-- m/s</span>
+      <span id="data-source-tag" class="data-tag">GPS</span>
+    </div>
+    <div id="weather-note" class="weather-note"></div>
+
+    <!-- リスクカード -->
+    <div id="risk-card" class="risk-card">
+      <div id="risk-icon" class="risk-icon">📍</div>
+      <div id="risk-label" class="risk-label">地点を選択</div>
+      <div id="risk-label-en" class="risk-label-en">SELECT LOCATION</div>
+      <div id="break-timer" class="break-timer hidden"></div>
+      <div id="break-alert" class="break-alert hidden">⏸️ 今すぐ休憩を取ってください！</div>
+    </div>
+
+    <!-- 作業強度 -->
+    <div class="card">
+      <div class="card-title">作業強度を選択</div>
+      <div class="work-grid" id="work-grid"></div>
+    </div>
+
+    <!-- 気象スライダー -->
+    <div class="card">
+      <div class="card-title-row">
+        <div class="card-title">気象パラメータ</div>
+        <span class="card-hint">← スライダーでWBGTがリアルタイム変化</span>
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">
+          <span>🌡️ 気温</span>
+          <span id="val-temp" class="slider-val">32.0℃</span>
+        </div>
+        <input type="range" id="sl-temp" min="20" max="45" step="0.1" value="32" oninput="App.onSlider()">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">
+          <span>💧 湿度</span>
+          <span id="val-hum" class="slider-val">65%</span>
+        </div>
+        <input type="range" id="sl-hum" min="20" max="100" step="1" value="65" oninput="App.onSlider()">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label">
+          <span>☀️ 日射量</span>
+          <span id="val-solar" class="slider-val">500 W/m²</span>
+        </div>
+        <input type="range" id="sl-solar" min="0" max="1000" step="10" value="500" oninput="App.onSlider()">
+      </div>
+    </div>
+
+    <!-- 推奨行動 -->
+    <div class="card recommend-card" id="recommend-card">
+      <div class="card-title">📋 今すぐやること</div>
+      <div id="recommend-list"></div>
+      <div class="evidence-note">※ ISO 7243・厚労省WBGT指針準拠の参考情報です</div>
+    </div>
+
+  </div><!-- /tab-monitor -->
+
+  <!-- ══ 緊急対応タブ ══ -->
+  <div id="tab-emergency" class="tab-content hidden">
+    <div class="emergency-banner">
+      <div class="emergency-title">🚨 熱中症が疑われたら</div>
+      <div class="emergency-sub">倒れた・意識がおかしい・返事がないときは<strong>すぐ119番</strong></div>
+    </div>
+
+    <a href="tel:119" class="call-btn">📞 119番に電話する</a>
+
+    <div class="card">
+      <div class="card-title">初期対応ステップ（タップで詳細）</div>
+      <div id="emergency-steps"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">重症度の見分け方</div>
+      <div class="grade-card" style="border-left-color:#facc15">
+        <div class="grade-title" style="color:#facc15">Ⅰ度（軽症）</div>
+        <div class="grade-signs">症状：めまい・立ちくらみ・筋肉のこむら返り</div>
+        <div class="grade-action">→ 涼しい場所で安静・水分補給</div>
+      </div>
+      <div class="grade-card" style="border-left-color:#fb923c">
+        <div class="grade-title" style="color:#fb923c">Ⅱ度（中等症）</div>
+        <div class="grade-signs">症状：頭痛・嘔吐・集中力低下・体がだるい</div>
+        <div class="grade-action">→ 医療機関を受診（できれば救急）</div>
+      </div>
+      <div class="grade-card" style="border-left-color:#f87171">
+        <div class="grade-title" style="color:#f87171">Ⅲ度（重症）</div>
+        <div class="grade-signs">症状：意識障害・けいれん・体が熱い（40℃超）</div>
+        <div class="grade-action">→ 即119番！冷却しながら待機</div>
+      </div>
+    </div>
+  </div><!-- /tab-emergency -->
+
+  <!-- ══ AIチャットタブ ══ -->
+  <div id="tab-chat" class="tab-content hidden">
+    <div id="chat-context-bar" class="context-bar">
+      <span id="ctx-wbgt">WBGT --℃</span>
+      <span class="sep">·</span>
+      <span id="ctx-work">作業強度未設定</span>
+      <span class="sep">·</span>
+      <span id="ctx-risk">--</span>
+      <span id="ctx-mode" class="ctx-mode">MOCK</span>
+    </div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <div class="quick-replies" id="quick-replies">
+      <button class="quick-btn" onclick="App.quickSend('頭が痛い 🤕')">頭が痛い 🤕</button>
+      <button class="quick-btn" onclick="App.quickSend('めまいがする 😵')">めまいがする 😵</button>
+      <button class="quick-btn" onclick="App.quickSend('今の作業は安全？')">今の作業は安全？</button>
+      <button class="quick-btn" onclick="App.quickSend('水分補給のタイミングは？')">水分補給のタイミングは？</button>
+    </div>
+    <div class="chat-input-row">
+      <input id="chat-input" type="text" placeholder="症状や状況を入力..." class="chat-input"
+        onkeydown="if(event.key==='Enter')App.sendChat()">
+      <button class="send-btn" id="send-btn" onclick="App.sendChat()">▶</button>
+    </div>
+  </div><!-- /tab-chat -->
+
+  <script src="app.js"></script>
+</body>
+</html>
