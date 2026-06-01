@@ -151,12 +151,15 @@ const App = (() => {
     updateSliders();
     recalc();
     // チャット初期メッセージ
-    appendAIMessage('こんにちは！熱中症対策AIです 👋\n現在 T-PIRC農場（筑波）のデモデータで動いています。\n地点を切り替えたり、症状を教えてください！');
+    appendAIMessage('こんにちは！熱中症対策AIです 👋\n地点を選択するとリアルタイムの気象データで判定します。\nGPSボタンで現在地の取得も可能です！');
     // 作業タイマー
     state.workTimer = setInterval(() => {
       state.workMinutes++;
       updateBreakTimer();
     }, 60000);
+    // 初期地点（T-PIRC農場）を即API取得
+    const initial = PRESETS[0];
+    fetchAndApplyWeather(initial.lat, initial.lon, initial.id, state.locationName);
   }
 
   // ── 作業ボタン生成 ─────────────────────────────
@@ -359,19 +362,18 @@ const App = (() => {
     setActivePreset(id);
     state.locationName = `${p.icon} ${p.label}`;
     document.getElementById('location-text').textContent = state.locationName;
-    // デモデータ適用
+    // まずデモデータで即表示（ちらつき防止）
     if (p.demo) {
       const d = p.demo;
       state.temp = d.temp; state.hum = d.hum; state.solar = d.solar;
       state.wind = d.wind; state.appTemp = d.app; state.weatherCode = d.code;
-      state.weatherNote = d.note;
-      document.getElementById('data-source-tag').textContent = 'DEMO';
-      document.getElementById('data-source-tag').style.color = '#fb923c';
-      document.getElementById('data-source-tag').style.background = 'rgba(251,146,60,0.15)';
+      state.weatherNote = d.note + '（取得中...）';
+      updateSliders();
+      recalc();
     }
-    updateSliders();
-    recalc();
     state.workMinutes = 0;
+    // 即座にAPIでリアルタイムデータ取得（フォールバックはデモデータ）
+    fetchAndApplyWeather(p.lat, p.lon, p.id, state.locationName);
   }
 
   function selectSaved(i) {
@@ -442,7 +444,14 @@ const App = (() => {
           if (r.ok) {
             const d = await r.json();
             const a = d.address;
-            name = a.city || a.town || a.village || a.county || a.state || name;
+            // 都道府県＋市区町村レベルで表示
+            const pref = a.province || a.state || '';
+            const city = a.city || a.town || a.village || a.city_district || a.county || '';
+            if (pref && city && pref !== city) {
+              name = `${pref} ${city}`;
+            } else {
+              name = city || pref || name;
+            }
           }
         } catch {}
         state.locationName = '📡 ' + name;

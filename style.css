@@ -457,14 +457,47 @@ input[type=range] {
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 
-/* ─── レスポンシブ ─── */
+/* ─── レスポンシブ（PC・タブレット） ─── */
+body {
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+}
+
+#app-shell {
+  width: 100%;
+  max-width: var(--max-w);
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  position: relative;
+  /* PC表示で左右に薄い境界線 */
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
+}
+
+/* PCで中央カラムの背景をしっかり塗る */
 @media (min-width: 500px) {
-  body { display: flex; justify-content: center; }
-  #demo-banner, #app-header, #tab-nav, .tab-content, #tab-chat {
-    max-width: var(--max-w); width: 100%;
+  #app-shell {
+    background: var(--bg);
   }
-  #demo-banner { position: fixed; top: 0; left: 50%; transform: translateX(-50%); }
-  #app-header  { position: fixed; top: 32px; left: 50%; transform: translateX(-50%); }
-  #tab-nav     { position: fixed; top: 32px; left: 50%; transform: translateX(-50%);
-                 margin-top: 70px; }
+  body::before {
+    /* 背景グローはbody全体ではなくshell内に */
+    display: none;
+  }
+  #app-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, var(--accent, #4ade80)18 0%, transparent 55%);
+    pointer-events: none;
+    z-index: 0;
+    transition: background 1s ease;
+  }
+}
+
+.tab-content {
+  height: calc(100dvh - 112px);
+}
+#tab-chat {
+  height: calc(100dvh - 112px);
 }
